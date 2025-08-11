@@ -4,7 +4,7 @@ import logging
 import requests
 from dotenv import load_dotenv
 from typing import Any, Dict, Optional
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_core.prompts import ChatPromptTemplate
