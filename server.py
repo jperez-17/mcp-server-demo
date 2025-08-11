@@ -230,3 +230,14 @@ def clear_auth() -> str:
   global auth_token
   auth_token = None
   return "✅ Token de autenticación eliminado"
+
+if __name__ == "__main__":
+  port = int(os.environ.get("PORT", 8000))
+
+  mcp.run(
+    transport="streamable-http",
+    host="0.0.0.0",
+    port=port,
+    path="/mcp",
+    log_level="info"
+  )
