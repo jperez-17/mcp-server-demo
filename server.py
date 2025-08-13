@@ -12,7 +12,8 @@ from langchain_text_splitters import RecursiveJsonSplitter
 from langchain_openai import ChatOpenAI
 from langchain.chains.combine_documents import create_stuff_documents_chain
 
-from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware import Middleware
+from starlette.middleware.cors import CORSMiddleware
 
 load_dotenv()
 
@@ -20,7 +21,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("mcp-server-demo")
 
 mcp = FastMCP("MCP Server Demo")
-app = mcp.app
 
 user_api_url = os.getenv("USER_API_URL")
 default_user_id = os.getenv("DEFAULT_USER_ID")
@@ -33,12 +33,20 @@ auth_token: Optional[str] = None
 user_data: Optional[Dict] = None
 vector_store = None
 
-app.add_middleware(
-  CORSMiddleware,
-  allow_origins=["*"],
-  allow_credentials=True,
-  allow_methods=["*"],
-  allow_headers=["*"],
+custom_middleware = [
+  Middleware(
+    CORSMiddleware,
+    allow_origins=["https://example.com", "https://app.example.com"],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
+  ),
+]
+
+http_app = mcp.http_app(
+  path='/mcp',
+  transport='http',
+  middleware=custom_middleware
 )
 
 def setup_vector_store(data: dict):
@@ -248,12 +256,13 @@ def clear_auth() -> str:
   return "✅ Token de autenticación eliminado"
 
 if __name__ == "__main__":
+  import uvicorn
+
   port = int(os.environ.get("PORT", 8000))
 
-  mcp.run(
-    transport="http",
+  uvicorn.run(
+    http_app,
     host="0.0.0.0",
-    port=port,
-    path="/mcp",
-    log_level="info"
+    port=port
   )
+

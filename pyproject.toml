@@ -6,7 +6,6 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "faiss-cpu>=1.11.0.post1",
-    "fastapi>=0.116.1",
     "fastmcp>=2.11.2",
     "langchain>=0.3.27",
     "langchain-community>=0.3.27",
@@ -16,4 +15,5 @@ dependencies = [
     "openai>=1.98.0",
     "python-dotenv>=1.1.1",
     "requests>=2.32.4",
+    "starlette>=0.47.2",
 ]
