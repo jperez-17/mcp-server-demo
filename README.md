@@ -11,11 +11,13 @@ Use the package manager [uv](https://docs.astral.sh/uv/getting-started/installat
 - Enter into project dir `cd mcp-server-demo`
 - Configure `.env` file with the required [environment variables](#environment-variables). You can use `.env.example` as guide to configure your `.env` file (This file MUST be git-ignored).
 - Run:
+
 ```
 python -m venv .venv
 source .venv/bin/activate
-uv run mcp dev server.py
+fastmcp dev server.py
 ```
+
 ## Environment Variables
 
 To run this project, you will need to add the following environment variables to your .env file
@@ -27,4 +29,8 @@ DEFAULT_USER_ID=
 TOKEN_API_URL=
 TOKEN_USER_NAME=
 TOKEN_USER_PASSWORD=
+
+OPENAI_API_KEY=
+
+PORT=
 ```
