@@ -12,12 +12,15 @@ from langchain_text_splitters import RecursiveJsonSplitter
 from langchain_openai import ChatOpenAI
 from langchain.chains.combine_documents import create_stuff_documents_chain
 
+from fastapi.middleware.cors import CORSMiddleware
+
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("mcp-server-demo")
 
 mcp = FastMCP("MCP Server Demo")
+app = mcp.app
 
 user_api_url = os.getenv("USER_API_URL")
 default_user_id = os.getenv("DEFAULT_USER_ID")
@@ -29,6 +32,14 @@ openai_api_key = os.getenv("OPENAI_API_KEY")
 auth_token: Optional[str] = None
 user_data: Optional[Dict] = None
 vector_store = None
+
+app.add_middleware(
+  CORSMiddleware,
+  allow_origins=["*"],
+  allow_credentials=True,
+  allow_methods=["*"],
+  allow_headers=["*"],
+)
 
 def setup_vector_store(data: dict):
   """
