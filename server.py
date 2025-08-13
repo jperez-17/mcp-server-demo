@@ -4,7 +4,7 @@ import logging
 import requests
 from dotenv import load_dotenv
 from typing import Any, Dict, Optional
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_core.prompts import ChatPromptTemplate
@@ -230,3 +230,14 @@ def clear_auth() -> str:
   global auth_token
   auth_token = None
   return "✅ Token de autenticación eliminado"
+
+if __name__ == "__main__":
+  port = int(os.environ.get("PORT", 8000))
+
+  mcp.run(
+    transport="http",
+    host="0.0.0.0",
+    port=port,
+    path="/mcp",
+    log_level="info"
+  )
