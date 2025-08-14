@@ -46,7 +46,8 @@ custom_middleware = [
 http_app = mcp.http_app(
   path='/mcp',
   transport='http',
-  middleware=custom_middleware
+  middleware=custom_middleware,
+  stateless_http=True
 )
 
 def setup_vector_store(data: dict):
@@ -266,3 +267,6 @@ if __name__ == "__main__":
     port=port
   )
 
+# curl -X POST http://localhost:8000/mcp/tools/authenticate \
+#   -H "Content-Type: application/json" \
+#   -d '{"api_url": "https://api.example.com/auth", "username": "test", "password": "1234"}'
