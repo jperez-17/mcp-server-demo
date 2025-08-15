@@ -3,19 +3,22 @@ import json
 import logging
 import requests
 from dotenv import load_dotenv
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
 from fastmcp import FastMCP
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import OpenAIEmbeddings
-from langchain_core.prompts import ChatPromptTemplate
 from langchain_text_splitters import RecursiveJsonSplitter
 from langchain_openai import ChatOpenAI
-from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain.schema import HumanMessage, SystemMessage, AIMessage
 
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 
+from collections import defaultdict
+
 load_dotenv()
+
+chat_sessions = defaultdict(list)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("mcp-server-demo")
@@ -65,13 +68,15 @@ def setup_vector_store(data: dict):
 
 @mcp.tool()
 def process_with_rag(
+  session_id: str,
   prompt: str = "¿Cuál fue la primera cuota inicial, en qué fecha fue y de cuánto fue el valor?",
   model: str = "gpt-4o",
   temperature: float = 0.2,
 ) -> str:
   """
-  Responde preguntas sobre los datos del usuario utilizando un enfoque RAG.
+  Responde preguntas sobre los datos del usuario utilizando un enfoque RAG y manteniendo memoria por sesión.
   """
+
   global vector_store
   global user_data
 
@@ -92,6 +97,8 @@ def process_with_rag(
     retriever = vector_store.as_retriever(search_kwargs={"k": 5})
     relevant_docs = retriever.invoke(prompt)
 
+    history = chat_sessions[session_id]
+
     system_prompt = (
       "Eres un asistente experto en el análisis de datos en formato JSON, especializado en el sector inmobiliario.\n"
       "Utiliza el contexto proporcionado para responder con precisión a las preguntas del usuario.\n\n"
@@ -102,18 +109,24 @@ def process_with_rag(
       "Importante:\n"
       "- Si la información solicitada no se encuentra en el contexto, responde indicando que no hay suficiente información disponible.\n\n"
       "Contexto:\n{context}"
-    )
+    ).format(context=relevant_docs)
 
-    prompt_template = ChatPromptTemplate.from_messages(
-      [
-        ("system", system_prompt),
-        ("human", "{input}"),
-      ]
-    )
+    langchain_messages = [SystemMessage(content=system_prompt)]
 
-    question_answer_chain = create_stuff_documents_chain(llm, prompt_template)
-    response = question_answer_chain.invoke({"input": prompt, "context": relevant_docs})
-    return response
+    for m in history:
+      if m["role"] == "user":
+        langchain_messages.append(HumanMessage(content=m["content"]))
+      elif m["role"] == "assistant":
+        langchain_messages.append(AIMessage(content=m["content"]))
+
+    langchain_messages.append(HumanMessage(content=prompt))
+
+    response = llm.invoke(langchain_messages)
+
+    history.append({"role": "user", "content": prompt})
+    history.append({"role": "assistant", "content": response.content})
+
+    return response.content
 
   except Exception as e:
     return f"❌ Error en el procesamiento RAG: {str(e)}"
@@ -237,7 +250,7 @@ async def fetch_data(
     return error_msg
 
 @mcp.tool()
-def clear_session() -> str:
+def clear_user_data() -> str:
   """
   Limpia el token de autenticación actual
   
@@ -248,6 +261,16 @@ def clear_session() -> str:
   auth_token = None
   user_data = None
   return "✅ Token de autenticación y datos de usuario eliminados"
+
+@mcp.tool()
+def clear_session(session_id: str = "default") -> str:
+  """
+  Limpia el historial de la sesión indicada.
+  """
+  if session_id in chat_sessions:
+    del chat_sessions[session_id]
+    return f"✅ Historial de la sesión '{session_id}' eliminado."
+  return f"⚠️ No existe la sesión '{session_id}'."
 
 if __name__ == "__main__":
   import uvicorn
