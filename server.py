@@ -113,28 +113,16 @@ def process_with_rag(
 
     question_answer_chain = create_stuff_documents_chain(llm, prompt_template)
     response = question_answer_chain.invoke({"input": prompt, "context": relevant_docs})
-    return f"🤖 Respuesta RAG:\n{response}"
+    return response
 
   except Exception as e:
     return f"❌ Error en el procesamiento RAG: {str(e)}"
 
-@mcp.tool()
 async def authenticate(
-  api_url: str = token_api_url,
-  username: str = user_name,
-  password: str = user_password,
+  api_url: str,
+  username: str,
+  password: str
 ) -> str:
-  """
-  Obtiene token de autenticación de la API
-  
-  Args:
-    api_url: URL del endpoint de autenticación
-    username: nombre de usuario para autenticación
-    password: contraseña de usuario para autenticación
-  
-  Returns:
-    Mensaje de confirmación de autenticación
-  """
   global auth_token
 
   if not api_url or not username or not password:
@@ -184,28 +172,32 @@ async def authenticate(
 
 @mcp.tool()
 async def fetch_data(
-  endpoint: str = user_api_url,
   user_id: str = default_user_id,
 ) -> str:
   """
   Obtiene datos de la API usando el token de autenticación
   
   Args:
-    endpoint: URL del endpoint para obtener datos
     user_id: Id de usuario
   
   Returns:
     Datos obtenidos de la API en formato JSON
   """
   global auth_token, user_data
-  
+
+  await authenticate(
+    api_url=token_api_url,
+    username=user_name,
+    password=user_password
+  )
+
   if not auth_token:
     return "❌ No hay token de autenticación disponible. Ejecuta 'authenticate' primero."
-    
-  try:
-    api_url = f"{endpoint}/{user_id}"
 
-    logger.info(f"Obteniendo datos de: {endpoint}")
+  try:
+    api_url = f"{user_api_url}/{user_id}"
+
+    logger.info(f"Obteniendo datos de: {api_url}")
 
     request_headers = {
       "Authorization": f"Bearer {auth_token}",
@@ -245,16 +237,17 @@ async def fetch_data(
     return error_msg
 
 @mcp.tool()
-def clear_auth() -> str:
+def clear_session() -> str:
   """
   Limpia el token de autenticación actual
   
   Returns:
       Confirmación de limpieza
   """
-  global auth_token
+  global auth_token, user_data
   auth_token = None
-  return "✅ Token de autenticación eliminado"
+  user_data = None
+  return "✅ Token de autenticación y datos de usuario eliminados"
 
 if __name__ == "__main__":
   import uvicorn
@@ -266,7 +259,3 @@ if __name__ == "__main__":
     host="0.0.0.0",
     port=port
   )
-
-# curl -X POST http://localhost:8000/mcp/tools/authenticate \
-#   -H "Content-Type: application/json" \
-#   -d '{"api_url": "https://api.example.com/auth", "username": "test", "password": "1234"}'
