@@ -65,12 +65,11 @@ def setup_vector_store(data: dict):
   vector_store = FAISS.from_texts(texts, embeddings)
   logger.info("✅ Base de datos vectorial creada exitosamente.")
 
-@mcp.tool()
 def process_with_rag(
   session_id: str,
-  prompt: str = "¿Cuál fue la primera cuota inicial, en qué fecha fue y de cuánto fue el valor?",
-  model: str = "gpt-4o",
-  temperature: float = 0.2,
+  prompt: str,
+  model: str,
+  temperature: float,
 ) -> str:
   """
   Responde preguntas sobre los datos del usuario utilizando un enfoque RAG y manteniendo memoria por sesión.
@@ -92,8 +91,7 @@ def process_with_rag(
   try:
     logger.info(f"Procesando prompt con RAG y el modelo: {model}")
 
-    llm = ChatOpenAI(model=model, temperature=temperature)
-    retriever = vector_store.as_retriever(search_kwargs={"k": 5})
+    retriever = vector_store.as_retriever(search_kwargs={"k": 3})
     relevant_docs = retriever.invoke(prompt)
 
     history = chat_sessions[session_id]
@@ -119,6 +117,8 @@ def process_with_rag(
         langchain_messages.append(AIMessage(content=m["content"]))
 
     langchain_messages.append(HumanMessage(content=prompt))
+
+    llm = ChatOpenAI(model=model, temperature=temperature)
     response = llm.invoke(langchain_messages)
 
     history.append({"role": "user", "content": prompt})
@@ -132,6 +132,43 @@ def process_with_rag(
 
   except Exception as e:
     return make_response("error", f"Error en el procesamiento RAG: {str(e)}")
+
+@mcp.tool()
+def get_answer(
+  session_id: str,
+  prompt: str = "¿Cuál fue la primera cuota inicial, en qué fecha fue y de cuánto fue el valor?",
+  model: str = "gpt-4o",
+  temperature: float = 0.2
+) -> str:
+  """
+  Responde preguntas sobre los datos del usuario utilizando un enfoque RAG
+  """
+  return process_with_rag(
+    session_id = session_id,
+    prompt = prompt,
+    model = model,
+    temperature = temperature
+  )
+
+@mcp.tool()
+def get_summary(
+  session_id: str,
+  model: str = "gpt-4o",
+  temperature: float = 0.2
+) -> str:
+  """
+  Retorna un resumen de la data dentro del JSON.
+  """
+  prompt = """Crea un resumen breve y amigable sobre los datos del JSON.
+Menciona solo información básica y no entres en detalles profundos.
+El resumen debe ser sencillo, claro y reflejar un tono amable, como si estuvieras hablando directamente con la persona.
+"""
+  return process_with_rag(
+    session_id = session_id,
+    prompt = prompt,
+    model = model,
+    temperature = temperature
+  )
 
 async def authenticate(
   api_url: str,
