@@ -6,9 +6,8 @@ from dotenv import load_dotenv
 from typing import Dict, Optional
 from fastmcp import FastMCP
 from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveJsonSplitter
-from langchain_openai import ChatOpenAI
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain.schema import HumanMessage, SystemMessage, AIMessage
 
 from starlette.middleware import Middleware
@@ -64,7 +63,7 @@ def setup_vector_store(data: dict):
   texts = [json.dumps(chunk) for chunk in json_chunks]
   embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
   vector_store = FAISS.from_texts(texts, embeddings)
-  print("✅ Base de datos vectorial creada exitosamente.")
+  logger.info("✅ Base de datos vectorial creada exitosamente.")
 
 @mcp.tool()
 def process_with_rag(
@@ -81,19 +80,19 @@ def process_with_rag(
   global user_data
 
   if not user_data:
-    return "❌ No hay datos disponibles. Ejecuta 'fetch_data' primero."
+    return make_response("error", "No hay datos disponibles. Ejecuta 'fetch_data' primero.")
 
   if vector_store is None:
     try:
       logger.info("Creando base de datos vectorial por primera vez...")
       setup_vector_store(user_data)
     except Exception as e:
-      return f"❌ Error al crear la base de datos vectorial: {str(e)}"
+      return make_response("error",  f"Error al crear la base de datos vectorial: {str(e)}")
 
   try:
     logger.info(f"Procesando prompt con RAG y el modelo: {model}")
-    llm = ChatOpenAI(model=model, temperature=temperature)
 
+    llm = ChatOpenAI(model=model, temperature=temperature)
     retriever = vector_store.as_retriever(search_kwargs={"k": 5})
     relevant_docs = retriever.invoke(prompt)
 
@@ -120,26 +119,32 @@ def process_with_rag(
         langchain_messages.append(AIMessage(content=m["content"]))
 
     langchain_messages.append(HumanMessage(content=prompt))
-
     response = llm.invoke(langchain_messages)
 
     history.append({"role": "user", "content": prompt})
     history.append({"role": "assistant", "content": response.content})
 
-    return response.content
+    return make_response(
+      "success",
+      "Respuesta generada con RAG",
+      { "answer": response.content }
+    )
 
   except Exception as e:
-    return f"❌ Error en el procesamiento RAG: {str(e)}"
+    return make_response("error", f"Error en el procesamiento RAG: {str(e)}")
 
 async def authenticate(
   api_url: str,
   username: str,
   password: str
 ) -> str:
+  """
+  Realiza la autenticación en la API y guarda el token globalmente.
+  """
   global auth_token
 
   if not api_url or not username or not password:
-    return "❌ Faltan parámetros de autenticación."
+    return make_response("error", "Faltan parámetros de autenticación")
 
   payload = json.dumps({
     "NomUsuario": username,
@@ -162,26 +167,33 @@ async def authenticate(
     logger.info(f"Respuesta de autenticación recibida")
     
     if auth_token:
-      return f"✅ Autenticación exitosa. Token obtenido y guardado."
+      return make_response(
+        "success",
+        "Autenticación exitosa. Token obtenido y guardado.",
+        { 
+          "token": auth_token
+        }
+      )
+
     else:
-      return f"⚠️ Autenticación completada pero no se encontró token en la respuesta:\n{json.dumps(data, indent=2)}"
-            
+      return make_response("warning", "Autenticación completada pero no se encontró token en la respuesta", data)
+
   except requests.exceptions.HTTPError as e:
-    error_msg = f"❌ Error HTTP {e.response.status_code}: {e.response.text}"
-    logger.error(error_msg)
-    return error_msg
+    error_msg = f"Error HTTP {e.response.status_code}: {e.response.text}"
+    logger.error(f"❌ {error_msg}")
+    return make_response("error", error_msg, e.response.text)
   except requests.exceptions.Timeout:
-    error_msg = "❌ Timeout en la petición de autenticación"
-    logger.error(error_msg)
-    return error_msg
+    error_msg = "Timeout en la petición de autenticación"
+    logger.error(f"❌ {error_msg}")
+    return make_response("error", error_msg, e.response.text)
   except requests.exceptions.RequestException as e:
-    error_msg = f"❌ Error de conexión en autenticación: {str(e)}"
-    logger.error(error_msg)
-    return error_msg
+    error_msg = f"Error de conexión en autenticación: {str(e)}"
+    logger.error(f"❌ {error_msg}")
+    return make_response("error", error_msg, e.response.text)
   except Exception as e:
-    error_msg = f"❌ Error inesperado en autenticación: {str(e)}"
-    logger.error(error_msg)
-    return error_msg
+    error_msg = f"Error inesperado en autenticación: {str(e)}"
+    logger.error(f"❌ {error_msg}")
+    return make_response("error", error_msg, e.response.text)
 
 @mcp.tool()
 async def fetch_data(
@@ -205,7 +217,7 @@ async def fetch_data(
   )
 
   if not auth_token:
-    return "❌ No hay token de autenticación disponible. Ejecuta 'authenticate' primero."
+    return make_response("error", "No hay token de autenticación disponible.")
 
   try:
     api_url = f"{user_api_url}/{user_id}"
@@ -222,32 +234,30 @@ async def fetch_data(
       headers=request_headers,
       timeout=30
     )
+
     response.raise_for_status()
+    user_data = response.json()
 
-    try:
-      user_data = response.json()
-      logger.info(f"✅ Datos obtenidos exitosamente")
-      return f"✅ Datos obtenidos exitosamente:\n{json.dumps(user_data, indent=2, ensure_ascii=False)}"
+    logger.info(f"✅ Datos obtenidos exitosamente")
 
-    except requests.exceptions.JSONDecodeError:
-      return f"✅ Datos obtenidos (no JSON):\n{response.text}"
+    return make_response("success", "Datos obtenidos exitosamente", user_data)
 
   except requests.exceptions.HTTPError as e:
-    error_msg = f"❌ Error HTTP {e.response.status_code}: {e.response.text}"
-    logger.error(error_msg)
-    return error_msg
+    error_msg = f"Error HTTP {e.response.status_code}: {e.response.text}"
+    logger.error(f"❌ {error_msg}")
+    return make_response("error", error_msg, e.response.text)
   except requests.exceptions.Timeout:
-    error_msg = "❌ Timeout obteniendo datos"
-    logger.error(error_msg)
-    return error_msg
+    error_msg = "Timeout obteniendo datos"
+    logger.error(f"❌ {error_msg}")
+    return make_response("error", error_msg, e.response.text)
   except requests.exceptions.RequestException as e:
-    error_msg = f"❌ Error de conexión obteniendo datos: {str(e)}"
-    logger.error(error_msg)
-    return error_msg
+    error_msg = f"Error de conexión obteniendo datos: {str(e)}"
+    logger.error(f"❌ {error_msg}")
+    return make_response("error", error_msg, e.response.text)
   except Exception as e:
-    error_msg = f"❌ Error inesperado obteniendo datos: {str(e)}"
-    logger.error(error_msg)
-    return error_msg
+    error_msg = f"Error inesperado obteniendo datos: {str(e)}"
+    logger.error(f"❌ {error_msg}")
+    return make_response("error", error_msg, e.response.text)
 
 @mcp.tool()
 def clear_user_data() -> str:
@@ -260,7 +270,7 @@ def clear_user_data() -> str:
   global auth_token, user_data
   auth_token = None
   user_data = None
-  return "✅ Token de autenticación y datos de usuario eliminados"
+  return make_response("success", "Token de autenticación y datos de usuario eliminados")
 
 @mcp.tool()
 def clear_session(session_id: str = "default") -> str:
@@ -269,8 +279,19 @@ def clear_session(session_id: str = "default") -> str:
   """
   if session_id in chat_sessions:
     del chat_sessions[session_id]
-    return f"✅ Historial de la sesión '{session_id}' eliminado."
-  return f"⚠️ No existe la sesión '{session_id}'."
+    return make_response("success", f"Historial de la sesión '{session_id}' eliminado.")
+  return make_response("warning", f"No existe la sesión '{session_id}'.")
+
+def make_response(status: str, message: str, data=None) -> str:
+  """
+  Genera una respuesta estándar en formato JSON para las tools MCP.
+  """
+  result = {
+    "status": status,
+    "message": message,
+    "data": data
+  }
+  return f"{json.dumps(result, indent=2)}"
 
 if __name__ == "__main__":
   import uvicorn

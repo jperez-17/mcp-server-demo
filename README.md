@@ -15,7 +15,12 @@ Use the package manager [uv](https://docs.astral.sh/uv/getting-started/installat
 ```
 python -m venv .venv
 source .venv/bin/activate
+
+# Dev (Inspector)
 fastmcp dev server.py
+
+# Run Server
+python server.py
 ```
 
 ## Environment Variables
