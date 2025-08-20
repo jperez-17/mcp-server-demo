@@ -160,9 +160,11 @@ def get_summary(
   """
   Retorna un resumen de la data dentro del JSON.
   """
-  prompt = """Crea un resumen breve y amigable sobre los datos del JSON.
+  prompt = """Crea un resumen breve y amigable sobre las compras del usuario.
 Menciona solo información básica y no entres en detalles profundos.
-El resumen debe ser sencillo, claro y reflejar un tono amable, como si estuvieras hablando directamente con la persona.
+Incluye cual fue el último trámite que se realizó así como la fecha del último pago
+El resumen debe ser sencillo, claro y reflejar un tono amable, como si estuvieras hablando directamente con el comprador.
+Invita al usuario a consultar más información.
 """
   return process_with_rag(
     session_id = session_id,
