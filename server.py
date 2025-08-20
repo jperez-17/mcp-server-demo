@@ -70,7 +70,7 @@ def process_with_rag(
   prompt: str,
   model: str,
   temperature: float,
-) -> str:
+) -> dict:
   """
   Responde preguntas sobre los datos del usuario utilizando un enfoque RAG y manteniendo memoria por sesión.
   """
@@ -100,6 +100,7 @@ def process_with_rag(
       "Eres un asistente experto en el análisis de datos en formato JSON, especializado en el sector inmobiliario.\n"
       "Utiliza el contexto proporcionado para responder con precisión a las preguntas del usuario.\n\n"
       "Instrucciones para interpretar la información:\n"
+      "- Solo puedes responder preguntas relacionadas con el contexto en cuestión, según las políticas e información autorizada. Si el usuario pregunta algo fuera de ese alcance, responde amablemente que no puedes ayudar con ese tema y redirige la conversación al tema permitido.\n"
       "- Para información sobre viviendas, analiza el campo: 'unidadesAgrupacion'.\n"
       "- Para información sobre trámites, analiza el campo: 'tramitesAgrupacion'. Si 'fechaCumplimiento' no está disponible, utiliza 'fechaCompromiso', el orden de estos está basado en el campo 'orden'.\n"
       "- Para detalles de pagos o procesos relacionados con las viviendas, analiza el campo: 'planPagosAgrupacion'.\n\n"
@@ -139,7 +140,7 @@ def get_answer(
   prompt: str = "¿Cuál fue la primera cuota inicial, en qué fecha fue y de cuánto fue el valor?",
   model: str = "gpt-4o",
   temperature: float = 0.2
-) -> str:
+) -> dict:
   """
   Responde preguntas sobre los datos del usuario utilizando un enfoque RAG
   """
@@ -155,7 +156,7 @@ def get_summary(
   session_id: str,
   model: str = "gpt-4o",
   temperature: float = 0.2
-) -> str:
+) -> dict:
   """
   Retorna un resumen de la data dentro del JSON.
   """
@@ -174,7 +175,7 @@ async def authenticate(
   api_url: str,
   username: str,
   password: str
-) -> str:
+) -> dict:
   """
   Realiza la autenticación en la API y guarda el token globalmente.
   """
@@ -232,10 +233,8 @@ async def authenticate(
     logger.error(f"❌ {error_msg}")
     return make_response("error", error_msg, e.response.text)
 
-@mcp.tool()
-async def fetch_data(
-  user_id: str = default_user_id,
-) -> str:
+
+async def fetch_data(user_id: str) -> dict:
   """
   Obtiene datos de la API usando el token de autenticación
   
@@ -246,12 +245,6 @@ async def fetch_data(
     Datos obtenidos de la API en formato JSON
   """
   global auth_token, user_data
-
-  await authenticate(
-    api_url=token_api_url,
-    username=user_name,
-    password=user_password
-  )
 
   if not auth_token:
     return make_response("error", "No hay token de autenticación disponible.")
@@ -297,12 +290,22 @@ async def fetch_data(
     return make_response("error", error_msg, e.response.text)
 
 @mcp.tool()
-def clear_user_data() -> str:
+async def initialize(user_id: str = default_user_id) -> dict:
+  """
+  Se inicializan variables globales mediante una solicitud a la API para obtener el token y el JSON de respuesta.
+  """
+  await authenticate(
+    api_url=token_api_url,
+    username=user_name,
+    password=user_password
+  )
+
+  return await fetch_data(user_id=user_id)
+
+@mcp.tool()
+def clear_user_data() -> dict:
   """
   Limpia el token de autenticación actual
-  
-  Returns:
-      Confirmación de limpieza
   """
   global auth_token, user_data
   auth_token = None
@@ -310,7 +313,7 @@ def clear_user_data() -> str:
   return make_response("success", "Token de autenticación y datos de usuario eliminados")
 
 @mcp.tool()
-def clear_session(session_id: str = "default") -> str:
+def clear_session(session_id: str = "default") -> dict:
   """
   Limpia el historial de la sesión indicada.
   """
@@ -319,7 +322,7 @@ def clear_session(session_id: str = "default") -> str:
     return make_response("success", f"Historial de la sesión '{session_id}' eliminado.")
   return make_response("warning", f"No existe la sesión '{session_id}'.")
 
-def make_response(status: str, message: str, data=None) -> str:
+def make_response(status: str, message: str, data=None) -> dict:
   """
   Genera una respuesta estándar en formato JSON para las tools MCP.
   """
@@ -328,7 +331,7 @@ def make_response(status: str, message: str, data=None) -> str:
     "message": message,
     "data": data
   }
-  return f"{json.dumps(result, indent=2)}"
+  return result
 
 if __name__ == "__main__":
   import uvicorn
