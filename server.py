@@ -138,7 +138,7 @@ def process_with_rag(
 def get_answer(
   session_id: str,
   prompt: str = "¿Cuál fue la primera cuota inicial, en qué fecha fue y de cuánto fue el valor?",
-  model: str = "gpt-4o",
+  model: str = "gpt-5-nano",
   temperature: float = 0.2
 ) -> dict:
   """
@@ -154,7 +154,7 @@ def get_answer(
 @mcp.tool()
 def get_summary(
   session_id: str,
-  model: str = "gpt-4o",
+  model: str = "gpt-5-nano",
   temperature: float = 0.2
 ) -> dict:
   """
